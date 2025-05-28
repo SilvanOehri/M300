@@ -1,0 +1,11 @@
+zone "osWDo.local" {
+    type slave;
+    file "/var/cache/bind/db.forward.osWDo.local";
+    masters { 192.168.12.10; };
+};
+
+zone "12.168.192.in-addr.arpa" {
+    type slave;
+    file "/var/cache/bind/db.reverse.1.168.192";
+    masters { 192.168.12.10; };
+};
