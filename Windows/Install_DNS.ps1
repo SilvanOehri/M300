@@ -7,11 +7,11 @@
     Network: 192.168.12.0/24
     Linux Secondary DNS IP: 192.168.12.11
     Author: Silvan Oehri
-    Version: 1.0
-    Date: 2025-04-03
+    Version: 1.1
+    Date: 2025-05-29
 #>
 
-$domainZone = "oeWDo.local"
+$domainZone = "osWDo.local"
 $reverseZone = "12.168.192.in-addr.arpa"
 $secondaryDnsIP = "192.168.12.11"
 $dnsForwarder = "192.168.12.11"
@@ -29,36 +29,46 @@ Install-WindowsFeature DNS -IncludeManagementTools
 
 # 2. Create Forward Lookup Zone
 Write-Log "Creating forward lookup zone '$domainZone'..."
-Add-DnsServerPrimaryZone `
-    -Name $domainZone `
-    -ZoneFile "$domainZone.dns" `
-    -DynamicUpdate Secure `
+Add-DnsServerPrimaryZone 
+    -Name $domainZone 
+    -DynamicUpdate Secure 
     -ReplicationScope "Domain"
 
 # 3. Create Reverse Lookup Zone
 Write-Log "Creating reverse lookup zone '$reverseZone'..."
-Add-DnsServerPrimaryZone `
-    -NetworkId "192.168.12.0/24" `
-    -ZoneFile "$reverseZone.dns" `
-    -DynamicUpdate Secure `
+Add-DnsServerPrimaryZone 
+    -Name $reverseZone 
+    -DynamicUpdate Secure 
     -ReplicationScope "Domain"
 
 # 4. Configure Linux DNS as secondary zone server
-Write-Log "Allowing zone transfers to $secondaryDnsIP..."
-Set-DnsServerPrimaryZone `
-    -Name $domainZone `
-    -Notify Secondary `
-    -SecondaryServers $secondaryDnsIP
+if (Get-DnsServerZone -Name $domainZone -ErrorAction SilentlyContinue) {
+    Write-Log "Allowing zone transfers for '$domainZone' to $secondaryDnsIP..."
+    Set-DnsServerPrimaryZone 
+        -Name $domainZone 
+        -Notify NotifyServers 
+        -NotifyServers $secondaryDnsIP
+} else {
+    Write-Log "Forward zone '$domainZone' not found. Skipping zone transfer setup."
+}
 
-Set-DnsServerPrimaryZone `
-    -Name $reverseZone `
-    -Notify Secondary `
-    -SecondaryServers $secondaryDnsIP
+if (Get-DnsServerZone -Name $reverseZone -ErrorAction SilentlyContinue) {
+    Write-Log "Allowing zone transfers for '$reverseZone' to $secondaryDnsIP..."
+    Set-DnsServerPrimaryZone 
+        -Name $reverseZone 
+        -Notify NotifyServers 
+        -NotifyServers $secondaryDnsIP
+} else {
+    Write-Log "Reverse zone '$reverseZone' not found. Skipping zone transfer setup."
+}
 
 # 5. Add DNS Forwarder to Linux/BIND
 Write-Log "Adding forwarder to $dnsForwarder..."
-Add-DnsServerForwarder `
-    -IPAddress $dnsForwarder `
-    -PassThru
+$existingForwarders = (Get-DnsServerForwarder).IPAddress
+if ($existingForwarders -contains $dnsForwarder) {
+    Write-Log "Forwarder $dnsForwarder is already configured."
+} else {
+    Add-DnsServerForwarder -IPAddress $dnsForwarder -PassThru
+}
 
 Write-Log "DNS configuration complete."
